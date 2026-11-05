@@ -38,6 +38,11 @@ app.get('/api/health', (_req, res) => res.json({ ok: true, provider: config.what
 app.use('/api', async (_req, _res, next) => {
   try {
     await connectDB();
+    // Optional one-time demo data for a fresh deployment (SEED_ON_EMPTY=true).
+    if (process.env.SEED_ON_EMPTY === 'true' && !global.__seedChecked) {
+      global.__seedChecked = true;
+      await require('./seed').seed({ ifEmpty: true });
+    }
     next();
   } catch (err) {
     next(Object.assign(err, { status: 503, expose: 'Database unavailable' }));

@@ -69,7 +69,7 @@ const TICKETS = [
   ['Smart lamp reset help', '', 'open', 'low', 6, null],
 ];
 
-async function seed() {
+async function seed({ ifEmpty = process.argv.includes('--if-empty') } = {}) {
   if (config.mongoDb !== SAFE_DB && process.env.ALLOW_SEED_ANY_DB !== 'true') {
     throw new Error(`Refusing to seed database "${config.mongoDb}". Expected "${SAFE_DB}".`);
   }
@@ -77,7 +77,7 @@ async function seed() {
   const dbName = mongoose.connection.db.databaseName;
   if (dbName !== config.mongoDb) throw new Error(`Connected to unexpected database "${dbName}"`);
 
-  if (process.argv.includes('--if-empty') && (await User.estimatedDocumentCount()) > 0) {
+  if (ifEmpty && (await User.countDocuments()) > 0) {
     console.log(`Database "${dbName}" already has data; skipping seed.`);
     return;
   }
