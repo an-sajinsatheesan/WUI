@@ -16,11 +16,10 @@ const config = {
   whatsappProvider: process.env.WHATSAPP_PROVIDER || 'mock',
 };
 
-if (!config.jwtSecret) {
-  if (config.env === 'production') {
-    throw new Error('JWT_SECRET must be set in production');
-  }
-  config.jwtSecret = 'dev-only-secret-change-me';
-}
+// Required settings that are missing. In production the API answers every call with a
+// clear 503 listing them (see app.js) instead of crashing.
+config.missing = [!config.mongoUri && 'MONGODB_URI', !config.jwtSecret && config.env === 'production' && 'JWT_SECRET'].filter(Boolean);
+
+if (!config.jwtSecret && config.env !== 'production') config.jwtSecret = 'dev-only-secret-change-me';
 
 module.exports = config;

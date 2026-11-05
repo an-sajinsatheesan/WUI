@@ -32,6 +32,13 @@ app.use(
 );
 app.use(express.json({ limit: '100kb' }));
 
+app.use('/api', (_req, res, next) => {
+  if (config.missing.length) {
+    return res.status(503).json({ ok: false, error: `Server not configured: missing ${config.missing.join(', ')}` });
+  }
+  next();
+});
+
 app.get('/api/health', (_req, res) => res.json({ ok: true, provider: config.whatsappProvider }));
 
 // Ensure a DB connection for every API call (cached; cheap on warm serverless instances).
