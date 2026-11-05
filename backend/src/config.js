@@ -13,7 +13,15 @@ const config = {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean),
+  // Default provider for new WhatsApp accounts. Each account can override it in the UI.
   whatsappProvider: process.env.WHATSAPP_PROVIDER || 'mock',
+  // Key for encrypting provider credentials (API keys, tokens) in MongoDB.
+  // Falls back to JWT_SECRET. Changing it makes saved credentials unreadable (re-enter them).
+  encryptionKey: process.env.ENCRYPTION_KEY || '',
+  // Optional shared secret for incoming webhooks (?token= or x-webhook-token header).
+  webhookToken: process.env.WEBHOOK_TOKEN || '',
+  // Token you enter in the Meta App dashboard when verifying the webhook URL.
+  metaVerifyToken: process.env.META_VERIFY_TOKEN || '',
 };
 
 // Required settings that are missing. In production the API answers every call with a

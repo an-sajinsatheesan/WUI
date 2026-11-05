@@ -10,7 +10,7 @@ router.get('/', async (_req, res) => {
 });
 
 router.post('/', requireAdmin, async (req, res) => {
-  const data = pick(req.body, ['name', 'email', 'role', 'active']);
+  const data = pick(req.body, ['name', 'email', 'role', 'department', 'active']);
   const { password } = req.body || {};
   if (!data.name || !data.email) return res.status(400).json({ error: 'Name and email are required' });
   if (!password || String(password).length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
@@ -22,7 +22,7 @@ router.post('/', requireAdmin, async (req, res) => {
 });
 
 router.put('/:id', requireAdmin, async (req, res) => {
-  const data = pick(req.body, ['name', 'email', 'role', 'active']);
+  const data = pick(req.body, ['name', 'email', 'role', 'department', 'active']);
   if (req.body?.password) {
     if (String(req.body.password).length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
     data.passwordHash = await bcrypt.hash(String(req.body.password), 10);
@@ -31,7 +31,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
   if (req.params.id === req.user.id && (data.role === 'agent' || data.active === false)) {
     return res.status(400).json({ error: 'You cannot demote or deactivate yourself' });
   }
-  const user = await User.findByIdAndUpdate(req.params.id, data, { new: true, runValidators: true });
+  const user = await User.findByIdAndUpdate(req.params.id, data, { returnDocument: 'after', runValidators: true });
   if (!user) return res.status(404).json({ error: 'User not found' });
   res.json(user);
 });

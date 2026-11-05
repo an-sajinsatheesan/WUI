@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const mongoose = require('mongoose');
 const { Ticket, Customer, Conversation, User, nextSeq, TICKET_STATUSES, TICKET_PRIORITIES } = require('../models');
-const { requireAdmin } = require('../middleware/auth');
+const { requirePermission, can } = require('../permissions');
 const { pick, escapeRegex } = require('../utils');
 
 const FIELDS = ['subject', 'description', 'status', 'priority', 'customer', 'conversation', 'assignedTo'];
@@ -13,8 +13,16 @@ const populateTicket = (q) =>
     .populate('assignedTo', 'name role')
     .populate('createdBy', 'name');
 
-async function normalize(body, isCreate) {
+async function normalize(body, isCreate, user, current) {
   const data = pick(body, FIELDS);
+  // Assigning to someone else needs tickets.assign; assigning to yourself is always allowed.
+  if (data.assignedTo !== undefined) {
+    const target = data.assignedTo ? String(data.assignedTo) : null;
+    const unchanged = current && String(current.assignedTo || '') === String(target || '');
+    if (!unchanged && target && target !== user.id && !(await can(user, 'tickets.assign'))) {
+      throw Object.assign(new Error('You do not have permission to assign tickets to others'), { status: 403 });
+    }
+  }
   for (const k of ['conversation', 'assignedTo']) if (data[k] === '') data[k] = null;
   if (data.status && !TICKET_STATUSES.includes(data.status)) throw badRequest('Invalid status');
   if (data.priority && !TICKET_PRIORITIES.includes(data.priority)) throw badRequest('Invalid priority');
@@ -65,20 +73,22 @@ router.get('/:id', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const data = await normalize(req.body, true);
+  const data = await normalize(req.body, true, req.user, null);
   if (!data.subject) return res.status(400).json({ error: 'Subject is required' });
   const t = await Ticket.create({ ...data, number: await nextSeq('ticket'), createdBy: req.user._id });
   res.status(201).json(await populateTicket(Ticket.findById(t._id)));
 });
 
 router.put('/:id', async (req, res) => {
-  const data = await normalize(req.body, false);
-  const t = await populateTicket(Ticket.findByIdAndUpdate(req.params.id, data, { new: true, runValidators: true }));
+  const current = await Ticket.findById(req.params.id);
+  if (!current) return res.status(404).json({ error: 'Ticket not found' });
+  const data = await normalize(req.body, false, req.user, current);
+  const t = await populateTicket(Ticket.findByIdAndUpdate(req.params.id, data, { returnDocument: 'after', runValidators: true }));
   if (!t) return res.status(404).json({ error: 'Ticket not found' });
   res.json(t);
 });
 
-router.delete('/:id', requireAdmin, async (req, res) => {
+router.delete('/:id', requirePermission('tickets.delete'), async (req, res) => {
   const t = await Ticket.findByIdAndDelete(req.params.id);
   if (!t) return res.status(404).json({ error: 'Ticket not found' });
   res.json({ ok: true });

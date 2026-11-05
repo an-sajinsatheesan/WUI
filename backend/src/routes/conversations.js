@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const { Conversation, Customer, Message, User } = require('../models');
 const { sendOutbound } = require('../services/messaging');
 const { escapeRegex } = require('../utils');
+const { can } = require('../permissions');
 
 const populateConv = (q) =>
   q.populate('account', 'name phoneNumber color').populate('customer', 'name phone email company').populate('assignedTo', 'name role');
@@ -30,7 +31,7 @@ router.get('/:id', async (req, res) => {
 });
 
 router.post('/:id/read', async (req, res) => {
-  const conv = await Conversation.findByIdAndUpdate(req.params.id, { unreadCount: 0 }, { new: true });
+  const conv = await Conversation.findByIdAndUpdate(req.params.id, { unreadCount: 0 }, { returnDocument: 'after' });
   if (!conv) return res.status(404).json({ error: 'Conversation not found' });
   await Message.updateMany({ conversation: conv._id, direction: 'inbound', status: 'received' }, { status: 'read' });
   res.json({ ok: true });
@@ -39,13 +40,17 @@ router.post('/:id/read', async (req, res) => {
 // Update status / assignee
 router.patch('/:id', async (req, res) => {
   const update = {};
-  if (['open', 'closed'].includes(req.body?.status)) update.status = req.body.status;
+  if (['open', 'closed'].includes(req.body?.status)) {
+    if (!(await can(req.user, 'conversations.close'))) return res.status(403).json({ error: 'You do not have permission to close or reopen conversations' });
+    update.status = req.body.status;
+  }
   if (req.body?.assignedTo !== undefined) {
+    if (!(await can(req.user, 'conversations.assign'))) return res.status(403).json({ error: 'You do not have permission to assign conversations' });
     const id = req.body.assignedTo || null;
     if (id && !(await User.exists({ _id: id }))) return res.status(400).json({ error: 'User not found' });
     update.assignedTo = id;
   }
-  const conv = await populateConv(Conversation.findByIdAndUpdate(req.params.id, update, { new: true }));
+  const conv = await populateConv(Conversation.findByIdAndUpdate(req.params.id, update, { returnDocument: 'after' }));
   if (!conv) return res.status(404).json({ error: 'Conversation not found' });
   res.json(conv);
 });

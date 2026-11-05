@@ -10,16 +10,52 @@ WhatsApp Cloud API later.
 | Backend  | Node.js, Express 5, Mongoose                                  | `backend/`  |
 | Database | Your existing MongoDB Atlas M0 cluster, database `whatsapp_mvp` | —           |
 
-## Features (Phase 1)
+## Features
 
-- **Dashboard** – conversations, unread messages, open and resolved tickets, per-number breakdown.
-- **Unified Inbox** – three columns: conversation list · thread · customer & tickets. Messages from 4 dummy business numbers.
-- **Conversations** – read (auto mark-as-read), reply, close/reopen, assign to an agent.
-- **Account filter** – filter conversations by WhatsApp number (also via `?account=<id>`).
-- **Tickets** – create, edit, assign, change status/priority, close; delete (admin). Linkable to a conversation.
-- **Customers** – list, search, create, edit, delete (admin); profile with conversation history across all numbers and tickets.
-- **Users** – Admin and Agent roles. Admins manage users and can delete records; agents work conversations and tickets.
-- **Simulation** – the ⚡ buttons in the inbox create incoming customer messages; a mock webhook endpoint accepts them too.
+**Workspace (Admin and Agent)**
+- **Dashboard** – total conversations, unread conversations, open / in-progress / resolved tickets, conversations per WhatsApp account, recent conversations and recent tickets.
+- **WhatsApp Inbox** – three columns: conversation list · thread · customer & tickets. Filter by number, search, read, reply, close/reopen, assign.
+- **Tickets** – create, edit, assign, change status/priority, close, delete (permission).
+- **Customers** – list, search, create, edit, delete (permission); profile with history across all numbers and tickets.
+- **Top navigation** – company logo/name, global search (customers, conversations, tickets; `Ctrl K`), notifications (unread conversations and your active tickets), profile menu.
+
+**Administration (Admin only)**
+- **Team** – add/edit users, Admin or Agent role, department, active/disabled, last login.
+- **WhatsApp Accounts** – add/edit numbers, activate/deactivate, department, provider type, API keys, connection status with *Test connection*, webhook URL.
+- **Settings** – company profile, departments, **roles & permissions** (what Agents may do), provider comparison and webhook endpoints.
+
+## WhatsApp providers
+
+Each WhatsApp account chooses its own provider in **WhatsApp Accounts → Edit → Provider connection**. Only Admins can see
+or change provider settings; the API enforces this too.
+
+| Provider | Settings entered in the app |
+| -------- | --------------------------- |
+| Simulated (demo) | none |
+| Meta WhatsApp Cloud API | API base URL, Phone number ID, WABA ID (optional), Access token |
+| 360dialog | API base URL, API key |
+| WATI | API endpoint (with tenant ID), Access token |
+| Twilio | API base URL, Account SID, sender number (optional), Auth token |
+
+- **Secrets** (tokens, API keys, auth tokens) are encrypted with AES-256-GCM before they are stored, are never returned to
+  the browser (the UI only shows "Saved"), and are only decrypted on the server when sending or testing.
+- **Test connection** calls the provider with the saved credentials and records *Connected* / *Error* / *Not configured*.
+- **Deactivated** numbers cannot send replies; incoming messages are still stored.
+- **Incoming messages**: give the provider the webhook URL shown in the account's edit dialog:
+  `https://<backend>/api/webhooks/<provider>?account=<accountId>` (add `&token=<WEBHOOK_TOKEN>` if you set one).
+  For Meta, set `META_VERIFY_TOKEN` on the backend and enter the same value in the Meta App webhook settings.
+- Adding another provider: create `backend/src/providers/<name>.js` with `fields`, `sendMessage`, `testConnection` and
+  `parseWebhook`, then register it in `providers/index.js`. The form in the UI is generated from `fields`.
+
+Not yet included: template messages (needed to message a customer outside the 24-hour window), media sending, and
+provider signature verification on webhooks (use `WEBHOOK_TOKEN` meanwhile).
+
+## Roles & permissions
+
+Admins can do everything. In **Settings → Roles & permissions** an Admin switches these on or off for Agents:
+assign conversations, close/reopen conversations, assign tickets to others, delete tickets, create/edit customers,
+delete customers, use the message simulator. Managing the team, WhatsApp accounts/API keys and settings is always
+admin-only. Every permission is checked by the API, not just hidden in the UI.
 
 ## Project structure
 
@@ -186,8 +222,11 @@ the frontend's `API_URL` to that host's `/api` URL.
 | `JWT_SECRET`        | yes (prod) | Signs login tokens. Required when `NODE_ENV=production`.           |
 | `JWT_EXPIRES_IN`    | no       | Token lifetime, default `7d`.                                        |
 | `CORS_ORIGINS`      | yes      | Comma-separated allowed frontend origins; `*` wildcard per subdomain label. |
-| `WHATSAPP_PROVIDER` | no       | `mock` (default).                                                    |
-| `WEBHOOK_TOKEN`     | no       | Shared secret for `/api/webhooks/whatsapp`.                          |
+| `WHATSAPP_PROVIDER` | no       | Default provider for new accounts, `mock`.                           |
+| `ENCRYPTION_KEY`    | no       | Encrypts provider API keys in MongoDB. Falls back to `JWT_SECRET`.   |
+| `WEBHOOK_TOKEN`     | no       | Shared secret for `/api/webhooks/*` (`?token=` or `x-webhook-token`). |
+| `META_VERIFY_TOKEN` | no       | Token for Meta's webhook verification handshake.                     |
+| `SEED_ON_EMPTY`     | no       | `true` loads demo data on first request when the database is empty. |
 | `PORT`              | no       | Local port, default `3000`.                                          |
 
 **Frontend (Vercel project settings only)**
@@ -195,17 +234,6 @@ the frontend's `API_URL` to that host's `/api` URL.
 | Variable  | Description                                                   |
 | --------- | ------------------------------------------------------------- |
 | `API_URL` | Public backend URL ending in `/api`, used at build time only. |
-
-## Replacing the mock with the real WhatsApp Cloud API
-
-1. Add `backend/src/providers/metaProvider.js` implementing the same interface as `mockProvider.js`:
-   `sendMessage({ from, to, text })` → `{ providerMessageId, status }` and `parseWebhook(body)` →
-   `[{ from, to, text, providerMessageId, timestamp }]`.
-2. Register it in `src/providers/index.js` and set `WHATSAPP_PROVIDER=meta` plus its credentials as backend env vars.
-3. Store each number's Meta phone-number id in `Account.providerPhoneId`.
-4. Point Meta's webhook at `/api/webhooks/whatsapp` (add the `GET` verification handshake Meta requires).
-
-Storage, inbox, tickets and UI need no changes.
 
 ## API overview
 
@@ -215,7 +243,11 @@ All routes are under `/api` and need `Authorization: Bearer <token>` except `aut
 | ------ | ---- | ----- |
 | POST | `/auth/login` · GET `/auth/me` | JWT login |
 | GET | `/dashboard` | totals, per-number stats, recent tickets |
-| GET | `/accounts` | WhatsApp numbers with unread counts (POST/PUT admin) |
+| GET | `/accounts` | WhatsApp numbers with unread counts (no secrets) |
+| GET | `/accounts/providers` | provider list and their settings fields (admin) |
+| POST · PUT | `/accounts`, `/accounts/:id` | add / edit number, department, active, provider, keys (admin) |
+| POST | `/accounts/:id/test` | test provider connection (admin) |
+| GET · PUT | `/settings` | company, departments, agent permissions (PUT admin) |
 | GET | `/conversations?accountId=&status=&unread=&search=` | list |
 | GET · PATCH | `/conversations/:id` | thread with messages · status/assignee |
 | POST | `/conversations/:id/read` · `/conversations/:id/messages` | mark read · send reply |
@@ -223,9 +255,10 @@ All routes are under `/api` and need `Authorization: Bearer <token>` except `aut
 | GET · PUT · DELETE | `/tickets/:id` | DELETE admin only |
 | GET · POST | `/customers?search=` | |
 | GET · PUT · DELETE | `/customers/:id` | GET includes history and tickets; DELETE admin only |
-| GET · POST · PUT · DELETE | `/users`, `/users/:id` | write operations admin only |
+| GET · POST · PUT · DELETE | `/users`, `/users/:id` | Team; write operations admin only |
 | POST | `/simulate/incoming` | `{ conversationId }` or `{ accountId?, customerId?, text? }` |
-| POST | `/webhooks/whatsapp` | provider webhook (mock format above) |
+| POST | `/webhooks/:provider` | incoming messages: `meta`, `360dialog`, `wati`, `twilio`, `whatsapp` (mock format) |
+| GET | `/webhooks/meta` | Meta webhook verification |
 
 ## Notes
 

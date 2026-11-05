@@ -25,6 +25,12 @@ export class AuthService {
   readonly token = signal<string | null>(read(TOKEN_KEY));
   readonly user = signal<User | null>(JSON.parse(read(USER_KEY) || 'null'));
   readonly isAdmin = computed(() => this.user()?.role === 'admin');
+  /** Permission keys from the server. Admins have all of them. */
+  readonly permissions = computed(() => this.user()?.permissions ?? []);
+
+  can(key: string): boolean {
+    return this.isAdmin() || this.permissions().includes(key);
+  }
 
   login(email: string, password: string): Observable<{ token: string; user: User }> {
     return this.http.post<{ token: string; user: User }>(`${environment.apiUrl}/auth/login`, { email, password }).pipe(

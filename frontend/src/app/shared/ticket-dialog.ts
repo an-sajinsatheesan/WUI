@@ -7,7 +7,7 @@ import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
 import { TextareaModule } from 'primeng/textarea';
 import { ApiService } from '../core/api.service';
-import { errorMessage } from '../core/auth';
+import { AuthService, errorMessage } from '../core/auth';
 import { Customer, TICKET_PRIORITIES, TICKET_STATUSES, Ticket, User } from '../core/models';
 
 interface TicketForm {
@@ -96,6 +96,7 @@ interface TicketForm {
 export class TicketDialog {
   private api = inject(ApiService);
   private toast = inject(MessageService);
+  private auth = inject(AuthService);
 
   visible = model(false);
   ticket = input<Ticket | null>(null);
@@ -127,7 +128,11 @@ export class TicketDialog {
           assignedTo: t.assignedTo?.id ?? null,
         }
       : { ...this.blank(), subject: this.defaultSubject(), customer: this.customerId() };
-    this.api.users().subscribe((u) => this.users.set(u.filter((x) => x.active)));
+    // Without tickets.assign an agent can only pick themselves (or keep the current assignee).
+    const me = this.auth.user()?.id;
+    const keep = this.ticket()?.assignedTo?.id;
+    const canAssign = this.auth.can('tickets.assign');
+    this.api.users().subscribe((u) => this.users.set(u.filter((x) => x.active && (canAssign || x.id === me || x.id === keep))));
     if (!this.conversationId() && !t) this.api.customers().subscribe((c) => this.customers.set(c));
   }
 

@@ -2,6 +2,7 @@ const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const { User } = require('../models');
 const { requireAuth, signToken } = require('../middleware/auth');
+const { permissionsFor } = require('../permissions');
 
 router.post('/login', async (req, res) => {
   const { email, password } = req.body || {};
@@ -10,9 +11,11 @@ router.post('/login', async (req, res) => {
   if (!user || !user.active || !(await bcrypt.compare(String(password), user.passwordHash))) {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
-  res.json({ token: signToken(user), user });
+  user.lastLoginAt = new Date();
+  await user.save();
+  res.json({ token: signToken(user), user: { ...user.toJSON(), permissions: await permissionsFor(user) } });
 });
 
-router.get('/me', requireAuth, (req, res) => res.json(req.user));
+router.get('/me', requireAuth, async (req, res) => res.json({ ...req.user.toJSON(), permissions: await permissionsFor(req.user) }));
 
 module.exports = router;

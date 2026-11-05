@@ -2,7 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { Account, Conversation, Customer, CustomerDetail, Dashboard, Message, Ticket, User } from './models';
+import { Account, AppSettings, Conversation, Customer, CustomerDetail, Dashboard, Message, ProviderInfo, Ticket, User } from './models';
 
 type Params = Record<string, string | number | boolean | null | undefined>;
 
@@ -23,6 +23,23 @@ export class ApiService {
   }
   accounts(): Observable<Account[]> {
     return this.http.get<Account[]>(`${this.base}/accounts`);
+  }
+  providers(): Observable<ProviderInfo[]> {
+    return this.http.get<ProviderInfo[]>(`${this.base}/accounts/providers`);
+  }
+  saveAccount(id: string | null, body: Record<string, unknown>): Observable<Account> {
+    return id ? this.http.put<Account>(`${this.base}/accounts/${id}`, body) : this.http.post<Account>(`${this.base}/accounts`, body);
+  }
+  testAccount(id: string): Observable<Account> {
+    return this.http.post<Account>(`${this.base}/accounts/${id}/test`, {});
+  }
+
+  // Settings
+  settings(): Observable<AppSettings> {
+    return this.http.get<AppSettings>(`${this.base}/settings`);
+  }
+  saveSettings(body: Partial<AppSettings>): Observable<AppSettings> {
+    return this.http.put<AppSettings>(`${this.base}/settings`, body);
   }
 
   // Conversations

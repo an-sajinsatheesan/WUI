@@ -6,6 +6,7 @@ import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
 import { TableModule } from 'primeng/table';
 import { ApiService } from '../core/api.service';
+import { AuthService } from '../core/auth';
 import { Customer } from '../core/models';
 import { CustomerForm } from './customer-form';
 
@@ -13,15 +14,17 @@ import { CustomerForm } from './customer-form';
   selector: 'app-customers',
   imports: [DatePipe, FormsModule, ButtonModule, InputTextModule, TableModule, CustomerForm],
   template: `
-    <div class="mx-auto max-w-7xl p-4 lg:p-6">
-      <div class="rounded-lg border border-slate-200 bg-white">
+    <div class="px-4 py-5 lg:px-8 lg:py-6">
+      <div class="rounded-xl border border-slate-200 bg-white shadow-xs">
         <div class="flex flex-wrap items-center gap-2 border-b border-slate-200 p-3">
           <span class="relative">
             <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
             <input pInputText class="w-64 !pl-8" placeholder="Search name, phone, email" [(ngModel)]="search" (ngModelChange)="debounced()" />
           </span>
           <span class="text-xs text-slate-500">{{ customers().length }} customers</span>
-          <div class="ml-auto"><p-button label="New customer" icon="pi pi-plus" (onClick)="dialog.set(true)" /></div>
+          @if (auth.can('customers.edit')) {
+            <div class="ml-auto"><p-button label="New customer" icon="pi pi-plus" (onClick)="dialog.set(true)" /></div>
+          }
         </div>
         <p-table [value]="customers()" [loading]="loading()" [paginator]="customers().length > 20" [rows]="20" styleClass="text-sm" [tableStyle]="{ 'min-width': '48rem' }">
           <ng-template #header>
@@ -58,6 +61,7 @@ import { CustomerForm } from './customer-form';
 export class CustomersPage {
   private api = inject(ApiService);
   private router = inject(Router);
+  protected auth = inject(AuthService);
   protected customers = signal<Customer[]>([]);
   protected loading = signal(true);
   protected dialog = signal(false);

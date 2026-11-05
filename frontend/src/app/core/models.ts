@@ -7,18 +7,66 @@ export interface User {
   name: string;
   email: string;
   role: Role;
+  department?: string;
   active: boolean;
+  lastLoginAt?: string | null;
   createdAt?: string;
+  permissions?: string[];
 }
+
+export type ProviderName = 'mock' | 'meta' | '360dialog' | 'wati' | 'twilio';
+export type ConnectionStatus = 'simulated' | 'not_configured' | 'connected' | 'error';
 
 export interface Account {
   id: string;
   name: string;
   phoneNumber: string;
   color: string;
-  provider?: string;
+  department?: string;
+  active?: boolean;
+  provider?: ProviderName;
+  providerConfig?: Record<string, string>;
+  secretsSet?: Record<string, boolean>;
+  connectionStatus?: ConnectionStatus;
+  statusMessage?: string;
+  lastCheckedAt?: string | null;
   unread?: number;
+  conversations?: number;
 }
+
+export interface ProviderField {
+  key: string;
+  label: string;
+  type: 'text' | 'url' | 'secret';
+  required: boolean;
+  default?: string;
+  placeholder?: string;
+  help?: string;
+}
+
+export interface ProviderInfo {
+  name: ProviderName;
+  label: string;
+  description: string;
+  docsUrl: string;
+  fields: ProviderField[];
+}
+
+export interface AppSettings {
+  companyName: string;
+  logoUrl: string;
+  departments: string[];
+  permissions: { key: string; label: string; description: string }[];
+  agentPermissions: Record<string, boolean>;
+  myPermissions: string[];
+}
+
+export const CONNECTION_LABELS: Record<ConnectionStatus, { label: string; dot: string; text: string }> = {
+  connected: { label: 'Connected', dot: 'bg-emerald-500', text: 'text-emerald-700' },
+  simulated: { label: 'Simulated', dot: 'bg-sky-500', text: 'text-sky-700' },
+  not_configured: { label: 'Not configured', dot: 'bg-amber-500', text: 'text-amber-700' },
+  error: { label: 'Error', dot: 'bg-red-500', text: 'text-red-700' },
+};
 
 export interface Customer {
   id: string;

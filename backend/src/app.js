@@ -67,6 +67,7 @@ app.use('/api/tickets', require('./routes/tickets'));
 app.use('/api/customers', require('./routes/customers'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/simulate', require('./routes/simulate'));
+app.use('/api/settings', require('./routes/settings'));
 
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 

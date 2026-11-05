@@ -11,17 +11,29 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const config = require('./config');
 const { connectDB } = require('./db');
-const { User, Account, Customer, Conversation, Message, Ticket, Counter } = require('./models');
+const { User, Account, Customer, Conversation, Message, Ticket, Counter, Settings } = require('./models');
 
 const SAFE_DB = 'whatsapp_mvp';
 
 const minutesAgo = (m) => new Date(Date.now() - m * 60 * 1000);
 
 const ACCOUNTS = [
-  { name: 'Sales', phoneNumber: '+97145550101', color: '#16a34a' },
-  { name: 'Support', phoneNumber: '+97145550102', color: '#2563eb' },
-  { name: 'Billing', phoneNumber: '+97145550103', color: '#d97706' },
-  { name: 'Deliveries', phoneNumber: '+97145550104', color: '#7c3aed' },
+  { name: 'Sales', phoneNumber: '+97145550101', color: '#16a34a', department: 'Sales' },
+  { name: 'Support', phoneNumber: '+97145550102', color: '#2563eb', department: 'Support' },
+  { name: 'Billing', phoneNumber: '+97145550103', color: '#d97706', department: 'Billing' },
+  { name: 'Deliveries', phoneNumber: '+97145550104', color: '#7c3aed', department: 'Deliveries' },
+  // Example of a real-provider number waiting for credentials.
+  {
+    name: 'Marketing',
+    phoneNumber: '+97145550105',
+    color: '#db2777',
+    department: 'Sales',
+    active: false,
+    provider: 'meta',
+    providerConfig: { apiUrl: 'https://graph.facebook.com/v23.0' },
+    connectionStatus: 'not_configured',
+    statusMessage: 'Missing: Phone number ID, Access token',
+  },
 ];
 
 const CUSTOMERS = [
@@ -84,14 +96,15 @@ async function seed({ ifEmpty = process.argv.includes('--if-empty') } = {}) {
 
   console.log(`Seeding database "${dbName}" ...`);
   // Clear only this app's own collections.
-  await Promise.all([User, Account, Customer, Conversation, Message, Ticket, Counter].map((M) => M.deleteMany({})));
+  await Promise.all([User, Account, Customer, Conversation, Message, Ticket, Counter, Settings].map((M) => M.deleteMany({})));
 
   const [adminHash, agentHash] = await Promise.all([bcrypt.hash('Admin@123', 10), bcrypt.hash('Agent@123', 10)]);
   const users = await User.insertMany([
-    { name: 'Admin User', email: 'admin@demo.com', passwordHash: adminHash, role: 'admin' },
-    { name: 'Sam Agent', email: 'agent1@demo.com', passwordHash: agentHash, role: 'agent' },
-    { name: 'Nora Agent', email: 'agent2@demo.com', passwordHash: agentHash, role: 'agent' },
+    { name: 'Admin User', email: 'admin@demo.com', passwordHash: adminHash, role: 'admin', department: 'Support' },
+    { name: 'Sam Agent', email: 'agent1@demo.com', passwordHash: agentHash, role: 'agent', department: 'Support' },
+    { name: 'Nora Agent', email: 'agent2@demo.com', passwordHash: agentHash, role: 'agent', department: 'Billing' },
   ]);
+  await Settings.create({ _id: 'app', companyName: 'Acme Trading' });
   const accounts = await Account.insertMany(ACCOUNTS);
   const customers = await Customer.insertMany(CUSTOMERS);
 

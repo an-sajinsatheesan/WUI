@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, effect, inject, input, signal, untracked } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -18,8 +18,8 @@ import { TicketDialog } from '../shared/ticket-dialog';
   selector: 'app-tickets',
   imports: [DatePipe, FormsModule, RouterLink, ButtonModule, InputTextModule, SelectModule, TableModule, TagModule, TooltipModule, TicketDialog],
   template: `
-    <div class="mx-auto max-w-7xl p-4 lg:p-6">
-      <div class="rounded-lg border border-slate-200 bg-white">
+    <div class="px-4 py-5 lg:px-8 lg:py-6">
+      <div class="rounded-xl border border-slate-200 bg-white shadow-xs">
         <!-- Toolbar -->
         <div class="flex flex-wrap items-center gap-2 border-b border-slate-200 p-3">
           <span class="relative">
@@ -78,7 +78,7 @@ import { TicketDialog } from '../shared/ticket-dialog';
                 @if (t.status !== 'closed') {
                   <p-button icon="pi pi-check" [text]="true" severity="secondary" size="small" pTooltip="Close ticket" (onClick)="close(t)" />
                 }
-                @if (auth.isAdmin()) {
+                @if (auth.can('tickets.delete')) {
                   <p-button icon="pi pi-trash" [text]="true" severity="danger" size="small" pTooltip="Delete" (onClick)="remove(t)" />
                 }
               </td>
@@ -116,8 +116,17 @@ export class TicketsPage {
   protected prioritySeverity = prioritySeverity;
   private timer: ReturnType<typeof setTimeout> | undefined;
 
+  /** ?q= from global search / notifications prefills the search box. */
+  q = input<string | undefined>();
+
   constructor() {
-    this.load();
+    effect(() => {
+      const q = this.q();
+      untracked(() => {
+        this.f.search = q ?? this.f.search;
+        this.load();
+      });
+    });
     this.api.accounts().subscribe((a) => this.accounts.set(a));
     this.api.users().subscribe((u: User[]) =>
       this.assigneeOptions.set([

@@ -12,7 +12,7 @@ import { TagModule } from 'primeng/tag';
 import { TextareaModule } from 'primeng/textarea';
 import { TooltipModule } from 'primeng/tooltip';
 import { ApiService } from '../core/api.service';
-import { errorMessage } from '../core/auth';
+import { AuthService, errorMessage } from '../core/auth';
 import { Account, Conversation, Ticket, User, statusLabel, statusSeverity } from '../core/models';
 import { TicketDialog } from '../shared/ticket-dialog';
 
@@ -47,7 +47,9 @@ type View = 'all' | 'unread' | 'open' | 'closed';
                 </div>
               </ng-template>
             </p-select>
-            <p-button icon="pi pi-bolt" severity="secondary" [outlined]="true" pTooltip="Simulate an incoming message" tooltipPosition="bottom" (onClick)="simulate()" ariaLabel="Simulate incoming" />
+            @if (auth.can('simulate.messages')) {
+              <p-button icon="pi pi-bolt" severity="secondary" [outlined]="true" pTooltip="Simulate an incoming message" tooltipPosition="bottom" (onClick)="simulate()" ariaLabel="Simulate incoming" />
+            }
           </div>
           <span class="relative block">
             <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
@@ -116,15 +118,19 @@ type View = 'all' | 'unread' | 'open' | 'closed';
                 {{ c.account.name }} {{ c.account.phoneNumber }}
               </div>
             </div>
-            <p-button icon="pi pi-bolt" label="Simulate reply" size="small" severity="secondary" [text]="true" (onClick)="simulate(c.id)" styleClass="max-sm:!hidden" />
-            <p-button
-              size="small"
-              [label]="c.status === 'open' ? 'Close' : 'Reopen'"
-              [icon]="c.status === 'open' ? 'pi pi-check' : 'pi pi-replay'"
-              severity="secondary"
-              [outlined]="true"
-              (onClick)="toggleStatus(c)"
-            />
+            @if (auth.can('simulate.messages')) {
+              <p-button icon="pi pi-bolt" label="Simulate reply" size="small" severity="secondary" [text]="true" (onClick)="simulate(c.id)" styleClass="max-sm:!hidden" />
+            }
+            @if (auth.can('conversations.close')) {
+              <p-button
+                size="small"
+                [label]="c.status === 'open' ? 'Close' : 'Reopen'"
+                [icon]="c.status === 'open' ? 'pi pi-check' : 'pi pi-replay'"
+                severity="secondary"
+                [outlined]="true"
+                (onClick)="toggleStatus(c)"
+              />
+            }
           </header>
 
           <div #scroller class="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-4 lg:px-8">
@@ -152,6 +158,15 @@ type View = 'all' | 'unread' | 'open' | 'closed';
             }
           </div>
 
+          @if (!accountActive(c)) {
+            <div class="flex items-center gap-2 border-t border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <i class="pi pi-exclamation-triangle text-xs"></i>
+              The {{ c.account.name }} number is deactivated, so replies are disabled.
+              @if (auth.isAdmin()) {
+                <a routerLink="/accounts" class="font-medium underline">Manage accounts</a>
+              }
+            </div>
+          } @else {
           <form class="flex items-end gap-2 border-t border-slate-200 bg-white p-3" (ngSubmit)="send()">
             <textarea
               pTextarea
@@ -166,6 +181,7 @@ type View = 'all' | 'unread' | 'open' | 'closed';
             ></textarea>
             <p-button type="submit" icon="pi pi-send" [loading]="sending()" [disabled]="!draft.trim()" ariaLabel="Send" />
           </form>
+          }
         } @else {
           <div class="flex flex-1 flex-col items-center justify-center gap-2 text-slate-400">
             <i class="pi pi-comments text-3xl"></i>
@@ -201,6 +217,7 @@ type View = 'all' | 'unread' | 'open' | 'closed';
                 optionValue="id"
                 [ngModel]="c.assignedTo?.id ?? null"
                 (ngModelChange)="assign(c, $event)"
+                [disabled]="!auth.can('conversations.assign')"
                 [showClear]="true"
                 placeholder="Unassigned"
               />
@@ -252,6 +269,7 @@ export class InboxPage {
   private api = inject(ApiService);
   private toast = inject(MessageService);
   private router = inject(Router);
+  protected auth = inject(AuthService);
 
   /** Route param /inbox/:id and query param ?account= (bound via withComponentInputBinding). */
   id = input<string | undefined>();
@@ -280,7 +298,7 @@ export class InboxPage {
 
   protected accountOptions = computed(() => [
     { label: 'All numbers', value: null, color: null, unread: this.accounts().reduce((s, a) => s + (a.unread || 0), 0) },
-    ...this.accounts().map((a) => ({ label: `${a.name} · ${a.phoneNumber}`, value: a.id, color: a.color, unread: a.unread })),
+    ...this.accounts().map((a) => ({ label: `${a.name} · ${a.phoneNumber}${a.active === false ? ' (inactive)' : ''}`, value: a.id, color: a.color, unread: a.unread })),
   ]);
 
   protected statusLabel = statusLabel;
@@ -450,6 +468,10 @@ export class InboxPage {
       const el = this.scroller()?.nativeElement;
       if (el) el.scrollTop = el.scrollHeight;
     });
+  }
+
+  protected accountActive(c: Conversation) {
+    return this.accounts().find((a) => a.id === c.account.id)?.active !== false;
   }
 
   protected initials(name: string) {

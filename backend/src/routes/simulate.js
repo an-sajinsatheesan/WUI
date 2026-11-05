@@ -1,6 +1,9 @@
 const router = require('express').Router();
 const { Account, Customer, Conversation } = require('../models');
 const { receiveInbound } = require('../services/messaging');
+const { requirePermission } = require('../permissions');
+
+router.use(requirePermission('simulate.messages'));
 
 const SAMPLE_TEXTS = [
   'Hi, is my order shipped yet?',
@@ -35,12 +38,12 @@ router.post('/incoming', async (req, res) => {
     account = conv.account;
     customer = conv.customer;
   } else {
-    account = accountId ? await Account.findById(accountId) : randomOf(await Account.find());
+    account = accountId ? await Account.findById(accountId) : randomOf(await Account.find({ active: true }));
     customer = customerId ? await Customer.findById(customerId) : randomOf(await Customer.find());
   }
   if (!account || !customer) return res.status(400).json({ error: 'No account/customer available. Run the seed first.' });
 
-  const result = await receiveInbound({ from: customer.phone, to: account.phoneNumber, text });
+  const result = await receiveInbound({ accountId: account._id, from: customer.phone, text });
   res.status(201).json(result);
 });
 

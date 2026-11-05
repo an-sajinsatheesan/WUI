@@ -14,7 +14,7 @@ import { CustomerForm } from './customer-form';
   selector: 'app-customer-detail',
   imports: [DatePipe, RouterLink, ButtonModule, TagModule, TicketDialog, CustomerForm],
   template: `
-    <div class="mx-auto max-w-7xl p-4 lg:p-6">
+    <div class="px-4 py-5 lg:px-8 lg:py-6">
       <a routerLink="/customers" class="mb-4 inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800">
         <i class="pi pi-arrow-left text-[10px]"></i> Customers
       </a>
@@ -22,15 +22,17 @@ import { CustomerForm } from './customer-form';
         <div class="grid gap-6 lg:grid-cols-3">
           <!-- Profile + tickets -->
           <div class="space-y-6">
-            <section class="rounded-lg border border-slate-200 bg-white">
+            <section class="rounded-xl border border-slate-200 bg-white shadow-xs">
               <header class="flex items-center gap-3 border-b border-slate-200 p-4">
                 <span class="flex size-10 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-700">{{ initials() }}</span>
                 <div class="min-w-0 flex-1">
                   <div class="truncate font-semibold text-slate-900">{{ c.name }}</div>
                   <div class="text-xs text-slate-500">Customer since {{ c.createdAt | date: 'MMM y' }}</div>
                 </div>
-                <p-button icon="pi pi-pencil" [text]="true" severity="secondary" (onClick)="editOpen.set(true)" ariaLabel="Edit" />
-                @if (auth.isAdmin()) {
+                @if (auth.can('customers.edit')) {
+                  <p-button icon="pi pi-pencil" [text]="true" severity="secondary" (onClick)="editOpen.set(true)" ariaLabel="Edit" />
+                }
+                @if (auth.can('customers.delete')) {
                   <p-button icon="pi pi-trash" [text]="true" severity="danger" (onClick)="remove()" ariaLabel="Delete" />
                 }
               </header>
@@ -42,7 +44,7 @@ import { CustomerForm } from './customer-form';
               </dl>
             </section>
 
-            <section class="rounded-lg border border-slate-200 bg-white">
+            <section class="rounded-xl border border-slate-200 bg-white shadow-xs">
               <header class="flex items-center justify-between border-b border-slate-200 px-4 py-3">
                 <span class="font-medium text-slate-900">Tickets</span>
                 <p-button label="New" icon="pi pi-plus" size="small" [text]="true" (onClick)="openTicket(null)" />
@@ -70,7 +72,7 @@ import { CustomerForm } from './customer-form';
           </div>
 
           <!-- Conversation history -->
-          <section class="rounded-lg border border-slate-200 bg-white lg:col-span-2">
+          <section class="rounded-xl border border-slate-200 bg-white shadow-xs lg:col-span-2">
             <header class="flex flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-3">
               <span class="mr-2 font-medium text-slate-900">Conversation history</span>
               @for (conv of c.conversations; track conv.id) {

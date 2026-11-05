@@ -23,13 +23,18 @@ const User = model(
       email: { type: String, required: true, unique: true, lowercase: true, trim: true },
       passwordHash: { type: String, required: true },
       role: { type: String, enum: ['admin', 'agent'], default: 'agent' },
+      department: { type: String, default: '' },
       active: { type: Boolean, default: true },
+      lastLoginAt: { type: Date, default: null },
     },
     opts
   )
 );
 
-// A WhatsApp Business number the company owns.
+const PROVIDERS = ['mock', 'meta', '360dialog', 'wati', 'twilio'];
+const CONNECTION_STATUSES = ['simulated', 'not_configured', 'connected', 'error'];
+
+// A WhatsApp Business number the company owns, and how it connects to a provider.
 const Account = model(
   'Account',
   new Schema(
@@ -37,11 +42,48 @@ const Account = model(
       name: { type: String, required: true, trim: true },
       phoneNumber: { type: String, required: true, unique: true, trim: true },
       color: { type: String, default: '#16a34a' },
-      provider: { type: String, default: 'mock' },
-      // Placeholder for a real provider's phone-number id (e.g. Meta Cloud API).
-      providerPhoneId: { type: String, default: '' },
+      department: { type: String, default: '' },
+      active: { type: Boolean, default: true },
+      provider: { type: String, enum: PROVIDERS, default: 'mock' },
+      // Non-secret provider settings (API URL, phone number id, account SID ...).
+      providerConfig: { type: Schema.Types.Mixed, default: {} },
+      // Secret provider settings, AES-256-GCM encrypted. Never sent to the browser.
+      providerSecrets: { type: Schema.Types.Mixed, default: {}, select: false },
+      connectionStatus: { type: String, enum: CONNECTION_STATUSES, default: 'simulated' },
+      statusMessage: { type: String, default: '' },
+      lastCheckedAt: { type: Date, default: null },
     },
-    opts
+    {
+      ...opts,
+      minimize: false,
+      toJSON: {
+        ...opts.toJSON,
+        transform: (_doc, ret) => {
+          delete ret._id;
+          // Only report which secrets are saved, never their values.
+          const secrets = ret.providerSecrets || {};
+          ret.secretsSet = Object.fromEntries(Object.keys(secrets).filter((k) => secrets[k]).map((k) => [k, true]));
+          delete ret.providerSecrets;
+          return ret;
+        },
+      },
+    }
+  )
+);
+
+// Single app-wide settings document (_id: 'app').
+const Settings = model(
+  'Settings',
+  new Schema(
+    {
+      _id: { type: String, default: 'app' },
+      companyName: { type: String, default: 'Unified Inbox' },
+      logoUrl: { type: String, default: '' },
+      departments: { type: [String], default: ['Sales', 'Support', 'Billing', 'Deliveries'] },
+      // Permission key -> allowed, for the Agent role. Admins always have every permission.
+      agentPermissions: { type: Schema.Types.Mixed, default: {} },
+    },
+    { timestamps: true, minimize: false, toJSON: { versionKey: false } }
   )
 );
 
@@ -117,7 +159,7 @@ const Ticket = model(
 const Counter = model('Counter', new Schema({ _id: String, seq: { type: Number, default: 0 } }));
 
 async function nextSeq(name) {
-  const c = await Counter.findByIdAndUpdate(name, { $inc: { seq: 1 } }, { new: true, upsert: true });
+  const c = await Counter.findByIdAndUpdate(name, { $inc: { seq: 1 } }, { returnDocument: 'after', upsert: true });
   return c.seq;
 }
 
@@ -129,7 +171,10 @@ module.exports = {
   Message,
   Ticket,
   Counter,
+  Settings,
   nextSeq,
+  PROVIDERS,
+  CONNECTION_STATUSES,
   TICKET_STATUSES,
   TICKET_PRIORITIES,
 };

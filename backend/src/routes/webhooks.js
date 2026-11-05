@@ -1,28 +1,50 @@
 const router = require('express').Router();
+const express = require('express');
+const config = require('../config');
 const { getProvider } = require('../providers');
 const { receiveInbound } = require('../services/messaging');
 
 /**
- * POST /api/webhooks/whatsapp
- * Provider-agnostic inbound endpoint. The active provider translates its own
- * payload format; storage logic is shared. If WEBHOOK_TOKEN is set, callers
- * must send it in the `x-webhook-token` header.
+ * Incoming messages from providers.
+ *
+ *   POST /api/webhooks/whatsapp            simulated/mock JSON format (kept for compatibility)
+ *   POST /api/webhooks/:provider           meta | 360dialog | wati | twilio | mock
+ *   GET  /api/webhooks/meta                Meta webhook verification (hub.challenge)
+ *
+ * Optional ?account=<id> pins the business account (needed for WATI).
+ * If WEBHOOK_TOKEN is set, callers must send it as ?token= or the x-webhook-token header.
  */
-router.post('/whatsapp', async (req, res) => {
-  const expected = process.env.WEBHOOK_TOKEN;
-  if (expected && req.headers['x-webhook-token'] !== expected) {
+router.use(express.urlencoded({ extended: false, limit: '100kb' })); // Twilio posts form data
+
+router.get('/meta', (req, res) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  if (mode === 'subscribe' && config.metaVerifyToken && token === config.metaVerifyToken) {
+    return res.status(200).send(String(req.query['hub.challenge'] || ''));
+  }
+  res.status(403).send('Verification failed');
+});
+
+router.post('/:provider', async (req, res) => {
+  if (config.webhookToken && (req.query.token || req.headers['x-webhook-token']) !== config.webhookToken) {
     return res.status(401).json({ error: 'Invalid webhook token' });
   }
-  const incoming = getProvider().parseWebhook(req.body);
+  const name = req.params.provider === 'whatsapp' ? 'mock' : req.params.provider;
+  const provider = getProvider(name);
+
+  const incoming = provider.parseWebhook(req);
   const results = [];
   for (const m of incoming) {
     try {
-      const { message } = await receiveInbound(m);
-      results.push({ id: message.id, ok: true });
+      const r = await receiveInbound({ ...m, accountId: req.query.account || undefined });
+      results.push({ ok: true, id: r.message?.id, duplicate: !!r.duplicate });
     } catch (err) {
       results.push({ ok: false, error: err.message });
     }
   }
+
+  // Providers only need a fast 200; Twilio expects TwiML.
+  if (name === 'twilio') return res.type('text/xml').send('<Response></Response>');
   res.json({ received: results.length, results });
 });
 

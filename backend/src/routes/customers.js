@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const { Customer, Conversation, Message, Ticket } = require('../models');
-const { requireAdmin } = require('../middleware/auth');
+const { requirePermission } = require('../permissions');
 const { pick, escapeRegex } = require('../utils');
 
 const FIELDS = ['name', 'phone', 'email', 'company', 'notes'];
@@ -61,20 +61,20 @@ router.get('/:id', async (req, res) => {
   });
 });
 
-router.post('/', async (req, res) => {
+router.post('/', requirePermission('customers.edit'), async (req, res) => {
   const data = pick(req.body, FIELDS);
   if (!data.name || !data.phone) return res.status(400).json({ error: 'Name and phone are required' });
   res.status(201).json(await Customer.create(data));
 });
 
-router.put('/:id', async (req, res) => {
-  const c = await Customer.findByIdAndUpdate(req.params.id, pick(req.body, FIELDS), { new: true, runValidators: true });
+router.put('/:id', requirePermission('customers.edit'), async (req, res) => {
+  const c = await Customer.findByIdAndUpdate(req.params.id, pick(req.body, FIELDS), { returnDocument: 'after', runValidators: true });
   if (!c) return res.status(404).json({ error: 'Customer not found' });
   res.json(c);
 });
 
 // Admin only: removes the customer and their conversations, messages and tickets.
-router.delete('/:id', requireAdmin, async (req, res) => {
+router.delete('/:id', requirePermission('customers.delete'), async (req, res) => {
   const c = await Customer.findById(req.params.id);
   if (!c) return res.status(404).json({ error: 'Customer not found' });
   const convIds = (await Conversation.find({ customer: c._id }).select('_id')).map((x) => x._id);
