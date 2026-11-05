@@ -1,0 +1,41 @@
+/* PrimeNG styles live in the "primeng" layer so Tailwind utilities always win. */
+@layer theme, base, primeng, components, utilities;
+
+@import 'tailwindcss';
+@plugin 'tailwindcss-primeui';
+@import 'primeicons/primeicons.css';
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+@layer base {
+  html,
+  body {
+    @apply h-full bg-slate-50 text-slate-800 antialiased;
+  }
+  body {
+    @apply text-sm;
+  }
+}
+
+/* Denser enterprise sizing for PrimeNG controls (components layer beats the primeng layer). */
+@layer components {
+  .p-inputtext,
+  .p-select-label,
+  .p-select-option,
+  .p-textarea,
+  .p-button,
+  .p-datatable,
+  .p-dialog,
+  .p-toast,
+  .p-confirmdialog {
+    font-size: 0.875rem;
+  }
+  .p-tag {
+    @apply text-xs whitespace-nowrap;
+  }
+  .p-datatable .p-datatable-thead > tr > th {
+    @apply text-xs font-medium text-slate-500;
+  }
+}
